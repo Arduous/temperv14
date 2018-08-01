@@ -191,7 +191,7 @@ usb_dev_handle *find_lvr_winusb(int device) {
 void ini_control_transfer(usb_dev_handle *dev) {
     int r,i;
 
-    char question[] = { 0x01,0x01 };
+    char question[reqIntLen];
 
     r = usb_control_msg(dev, 0x21, 0x09, 0x0201, 0x00, (char *) question, 2, timeout);
     if( r < 0 )
