@@ -8,7 +8,7 @@ Bus 001 Device 026: ID 0c45:7401 Microdia TEMPer Temperature Sensor
 
 This version based on http://dev-random.net/wp-content/uploads/2013/08/temperv14-1.zip
 
-I fixed two problems:
+littleyoda fixed two problems:
 * compiler error
 
     warning: implicit declaration of function ‘isprint’
@@ -17,3 +17,5 @@ I fixed two problems:
     USB interrupt read: Resource temporarily unavailable
     
     Fatal error> USB read failed
+
+I fixed an additional one with -Waggressive-loop-optimizations
