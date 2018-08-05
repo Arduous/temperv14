@@ -52,7 +52,7 @@
 #include <errno.h>
 #include <signal.h> 
 
-#define VERSION "0.0.2"
+#define VERSION "1.1"
 
 #define VENDOR_ID  0x0c45
 #define PRODUCT_ID 0x7401
@@ -61,14 +61,9 @@
 #define INTERFACE2 0x01
 
 const static int reqIntLen = 8;
-const static int reqBulkLen = 8;
-const static int endpoint_Int_in = 0x82; /* endpoint 0x81 address for IN */
-const static int endpoint_Int_out = 0x00; /* endpoint 1 address for OUT */
-const static int endpoint_Bulk_in = 0x82; /* endpoint 0x81 address for IN */
-const static int endpoint_Bulk_out = 0x00; /* endpoint 1 address for OUT */
 const static int timeout = 5000; /* timeout in ms */
 
-const static char uTemperatura[] = { 0x01, 0x80, 0x33, 0x01, 0x00, 0x00, 0x00,
+const static char uTemperature[] = { 0x01, 0x80, 0x33, 0x01, 0x00, 0x00, 0x00,
 		0x00 };
 const static char uIni1[] = { 0x01, 0x82, 0x77, 0x01, 0x00, 0x00, 0x00, 0x00 };
 const static char uIni2[] = { 0x01, 0x86, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00 };
@@ -76,9 +71,9 @@ const static char uIni2[] = { 0x01, 0x86, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00 };
 static int loopExitFlag = 1;
 static int debug = 0;
 static int seconds = 5;
-static int formato = 0;
+static int format = 0;
 static int mrtg = 0;
-static int deviceno = 0;
+static int deviceNumber = 0;
 static float delta = 0;
 
 void bad(const char *why) {
@@ -138,7 +133,7 @@ usb_dev_handle* setup_libusb_access(int device) {
 		return NULL;
 	}
 
-	// Microdia tiene 2 interfaces
+	// Microdia has 2 interfaces
 	if (usb_claim_interface(lvr_winusb, INTERFACE1) < 0) {
 		printf("Could not claim interface\n");
 		return NULL;
@@ -169,7 +164,9 @@ usb_dev_handle *find_lvr_winusb(int device) {
 				}
 
 				if (!(handle = usb_open(dev))) {
-					//                                        printf("Could not open USB device\n");
+					if (debug) {
+						printf("Could not open USB device\n");
+					}
 					return NULL;
 				}
 				if (--device == 0)
@@ -220,37 +217,10 @@ void control_transfer(usb_dev_handle *dev, const char *pquestion) {
 	}
 }
 
-void interrupt_transfer(usb_dev_handle *dev) {
-
-	int r, i;
-	char answer[reqIntLen];
-	char question[reqIntLen];
-	for (i = 0; i < reqIntLen; i++)
-		question[i] = i;
-	r = usb_interrupt_write(dev, endpoint_Int_out, question, reqIntLen,
-			timeout);
-	if (r < 0) {
-		perror("USB interrupt write");
-		bad("USB write failed");
-	}
-	r = usb_interrupt_read(dev, endpoint_Int_in, answer, reqIntLen, timeout);
-	if (r != reqIntLen) {
-		perror("USB interrupt read");
-		bad("USB read failed");
-	}
-
-	if (debug) {
-		for (i = 0; i < reqIntLen; i++)
-			printf("%i, %i, \n", question[i], answer[i]);
-	}
-
-	usb_release_interface(dev, 0);
-}
-
 void interrupt_read(usb_dev_handle *dev) {
 
 	int r, i;
-	unsigned char answer[reqIntLen];
+	char answer[reqIntLen];
 	bzero(answer, reqIntLen);
 
 	r = usb_interrupt_read(dev, 0x82, answer, reqIntLen, timeout);
@@ -267,10 +237,10 @@ void interrupt_read(usb_dev_handle *dev) {
 	}
 }
 
-void interrupt_read_temperatura(usb_dev_handle *dev, float *tempC) {
+void interrupt_read_temperature(usb_dev_handle *dev, float *tempC) {
 
 	int r, i, temperature;
-	unsigned char answer[reqIntLen];
+	char answer[reqIntLen];
 	bzero(answer, reqIntLen);
 
 	r = usb_interrupt_read(dev, 0x82, answer, reqIntLen, timeout);
@@ -289,30 +259,6 @@ void interrupt_read_temperatura(usb_dev_handle *dev, float *tempC) {
 	temperature = (answer[3] & 0xFF) + (answer[2] << 8);
 	*tempC = temperature * (125.0 / 32000.0);
 
-}
-
-void bulk_transfer(usb_dev_handle *dev) {
-
-	int r, i;
-	char answer[reqBulkLen];
-
-	r = usb_bulk_write(dev, endpoint_Bulk_out, NULL, 0, timeout);
-	if (r < 0) {
-		perror("USB bulk write");
-		bad("USB write failed");
-	}
-	r = usb_bulk_read(dev, endpoint_Bulk_in, answer, reqBulkLen, timeout);
-	if (r != reqBulkLen) {
-		perror("USB bulk read");
-		bad("USB read failed");
-	}
-
-	if (debug) {
-		for (i = 0; i < reqBulkLen; i++)
-			printf("%02x ", answer[i] & 0xFF);
-	}
-
-	usb_release_interface(dev, 0);
 }
 
 void ex_program(int sig) {
@@ -335,22 +281,22 @@ int main(int argc, char **argv) {
 			debug = 1;
 			break;
 		case 'c':
-			formato = 1; //Celsius
+			format = 1; //Celsius
 			break;
 		case 'f':
-			formato = 2; //Fahrenheit
+			format = 2; //Fahrenheit
 			break;
 		case 'm':
 			mrtg = 1;
 			break;
 		case 'd':
 			if (optarg != NULL) {
-				if (!sscanf(optarg, "%i", &deviceno) == 1) {
+				if (!sscanf(optarg, "%i", &deviceNumber) == 1) {
 					fprintf(stderr, "Error: '%s' is not numeric.\n", optarg);
 					exit(EXIT_FAILURE);
 				}
 			} else {
-				deviceno = 0;
+				deviceNumber = 0;
 			}
 			break;
 		case 'a':
@@ -377,7 +323,7 @@ int main(int argc, char **argv) {
 			}
 		case '?':
 		case 'h':
-			printf("pcsensor version %s\n", VERSION);
+			printf("TemperUSB reader version %s\n", VERSION);
 			printf("      Available options:\n");
 			printf("          -h help\n");
 			printf("          -v verbose\n");
@@ -408,13 +354,13 @@ int main(int argc, char **argv) {
 		int i = 1;
 
 		while ((lvr_winusb = setup_libusb_access(i)) != NULL) {
-			if ((deviceno == i++) | (deviceno == 0)) {
+			if ((deviceNumber == i++) | (deviceNumber == 0)) {
 
 				(void) signal(SIGINT, ex_program);
 
 				ini_control_transfer(lvr_winusb);
 
-				control_transfer(lvr_winusb, uTemperatura);
+				control_transfer(lvr_winusb, uTemperature);
 				interrupt_read(lvr_winusb);
 
 				control_transfer(lvr_winusb, uIni1);
@@ -424,15 +370,15 @@ int main(int argc, char **argv) {
 				interrupt_read(lvr_winusb);
 				interrupt_read(lvr_winusb);
 
-				control_transfer(lvr_winusb, uTemperatura);
-				interrupt_read_temperatura(lvr_winusb, &tempc);
+				control_transfer(lvr_winusb, uTemperature);
+				interrupt_read_temperature(lvr_winusb, &tempc);
 				tempc = (tempc + delta);
 
 				t = time(NULL);
 				local = localtime(&t);
 
 				if (mrtg) {
-					if (formato == 2) {
+					if (format == 2) {
 						printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
 						printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
 					} else {
@@ -444,9 +390,9 @@ int main(int argc, char **argv) {
 
 					printf("pcsensor\n");
 				} else {
-					if (formato == 2) {
+					if (format == 2) {
 						printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
-					} else if (formato == 1) {
+					} else if (format == 1) {
 						printf("%.2f\n", tempc);
 					} else {
 						printf("%04d/%02d/%02d %02d:%02d:%02d ",
