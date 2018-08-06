@@ -43,6 +43,10 @@
  * Added added arg (-a)
  *
  */
+/* 2018-08-06 V1.1 Samuel Progin
+ * Code clean-up, refactoring and formatting
+ *
+ */
 
 #include <usb.h>
 #include <stdio.h>
@@ -118,7 +122,9 @@ usb_dev_handle* setup_libusb_access(int device) {
 	usb_find_devices();
 
 	if (!(lvr_winusb = find_lvr_winusb(device))) {
-		//                printf("Couldn't find the USB device, Exiting\n");
+		if (debug) {
+			printf("Couldn't find the USB device, Exiting\n");
+		}
 		return NULL;
 	}
 
