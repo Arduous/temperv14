@@ -45,7 +45,7 @@
  */
 /* 2018-08-06 V1.1 Samuel Progin
  * Code clean-up, refactoring and formatting
- *
+ * 2 Warnings fixed
  */
 
 #include <usb.h>
