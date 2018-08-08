@@ -34,7 +34,7 @@
 /*
  * 2013-08-19
  * Modified from abobe version for better name, and support to 
- * subctract degress in celsius for some TEMPer devices that displayed 
+ * subtract degrees in Celsius for some TEMPer devices that displayed
  * too much.
  *
  */
@@ -46,20 +46,25 @@
 /* 2018-08-06 V1.1 Samuel Progin
  * Code clean-up, refactoring and formatting
  * 2 Warnings fixed
+ *
+ */
+/* 2018-08-06 V2.0 Samuel Progin
+ * Migrating from libusb to libusb-1.0
+ *
  */
 
-//#include <usb.h>
 #include <libusb-1.0/libusb.h>
 #include <stdio.h>
 #include <time.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <signal.h> 
 #include <getopt.h>
 
-#define VERSION "1.1"
+#define VERSION "2.0"
 
 #define VENDOR_ID  0x0c45
 #define PRODUCT_ID 0x7401
@@ -72,8 +77,6 @@ const static int timeout = 5000; /* timeout in ms */
 
 const static char uTemperature[] = { 0x01, 0x80, 0x33, 0x01, 0x00, 0x00, 0x00,
 		0x00 };
-const static char uIni1[] = { 0x01, 0x82, 0x77, 0x01, 0x00, 0x00, 0x00, 0x00 };
-const static char uIni2[] = { 0x01, 0x86, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00 };
 
 static int loopExitFlag = 1;
 static int debug = 0;
@@ -82,11 +85,14 @@ static int format = 0;
 static int mrtg = 0;
 static int deviceNumber = 0;
 static float delta = 0;
+int totalDevices = 0;
 
 uint8_t bmRequestType = 0x21;
 uint8_t bRequest = 0x09;
-uint16_t wValue = 0x0201;
-uint16_t wIndex = 0x0000;
+uint16_t wValueControl = 0x0201;
+uint16_t wIndexControl = 0x0000;
+uint16_t wValueXfer = 0x0200;
+uint16_t wIndexXfer = 0x0001;
 uint16_t wLength = 0x0002;
 
 
@@ -96,234 +102,22 @@ void bad(const char *why) {
 }
 
 
-static void print_devs(libusb_device *devs)
+static int open_device_temperusb(libusb_device *dev, libusb_device_handle **dev_handles)
 {
-	libusb_device *dev = devs;
-	int i = 0, j = 0;
-	uint8_t path[8];
-
-
 	struct libusb_device_descriptor desc;
 	int r = libusb_get_device_descriptor(dev, &desc);
 	if (r < 0) {
 		fprintf(stderr, "failed to get device descriptor");
-		return;
+		return 0;
 	}
-
-	printf("%04x:%04x (bus %d, device %d)",
-		desc.idVendor, desc.idProduct,
-		libusb_get_bus_number(dev), libusb_get_device_address(dev));
-
-	r = libusb_get_port_numbers(dev, path, sizeof(path));
-	if (r > 0) {
-		printf(" path: %d", path[0]);
-		for (j = 1; j < r; j++)
-			printf(".%d", path[j]);
+	if (desc.idVendor == VENDOR_ID && desc.idProduct == PRODUCT_ID){
+		r = libusb_open(dev, dev_handles);
+		return 1;
 	}
-	printf("\n");
-
+	return 0;
 }
 
 
-
-
-/*
-usb_dev_handle *find_lvr_winusb();
-*/
-
-/*
-void usb_detach(usb_dev_handle *lvr_winusb, int iInterface) {
-	int ret;
-
-	ret = usb_detach_kernel_driver_np(lvr_winusb, iInterface);
-	if (ret) {
-		if (errno == ENODATA) {
-			if (debug) {
-				printf("Device already detached\n");
-			}
-		} else {
-			if (debug) {
-				printf("Detach failed: %s[%d]\n", strerror(errno), errno);
-				printf("Continuing anyway\n");
-			}
-		}
-	} else {
-		if (debug) {
-			printf("detach successful\n");
-		}
-	}
-}
-*/
-
-/*
-usb_dev_handle* setup_libusb_access(int device) {
-	usb_dev_handle *lvr_winusb;
-
-	if (debug) {
-		usb_set_debug(255);
-	} else {
-		usb_set_debug(0);
-	}
-	usb_init();
-	usb_find_busses();
-	usb_find_devices();
-
-	if (!(lvr_winusb = find_lvr_winusb(device))) {
-		if (debug) {
-			printf("Couldn't find the USB device, Exiting\n");
-		}
-		return NULL;
-	}
-
-	usb_detach(lvr_winusb, INTERFACE1);
-
-	usb_detach(lvr_winusb, INTERFACE2);
-
-	usb_reset(lvr_winusb);
-
-	if (usb_set_configuration(lvr_winusb, 0x01) < 0) {
-		printf("Could not set configuration 1\n");
-		return NULL;
-	}
-
-	// Microdia has 2 interfaces
-	if (usb_claim_interface(lvr_winusb, INTERFACE1) < 0) {
-		printf("Could not claim interface\n");
-		return NULL;
-	}
-
-	if (usb_claim_interface(lvr_winusb, INTERFACE2) < 0) {
-		printf("Could not claim interface\n");
-		return NULL;
-	}
-
-	return lvr_winusb;
-}
-*/
-
-/*
-usb_dev_handle *find_lvr_winusb(int device) {
-
-	struct usb_bus *bus;
-	struct usb_device *dev;
-
-	for (bus = usb_busses; bus; bus = bus->next) {
-		for (dev = bus->devices; dev; dev = dev->next) {
-			if (dev->descriptor.idVendor == VENDOR_ID
-					&& dev->descriptor.idProduct == PRODUCT_ID) {
-				usb_dev_handle *handle;
-				if (debug) {
-					printf(
-							"lvr_winusb with Vendor Id: %x and Product Id: %x found.\n",
-							VENDOR_ID, PRODUCT_ID);
-				}
-
-				if (!(handle = usb_open(dev))) {
-					if (debug) {
-						printf("Could not open USB device\n");
-					}
-					return NULL;
-				}
-				if (--device == 0)
-					return handle;
-			}
-		}
-	}
-	return NULL;
-}
-*/
-
-/*
-void ini_control_transfer(usb_dev_handle *dev) {
-	int r, i;
-
-	char question[reqIntLen];
-
-	r = usb_control_msg(dev, 0x21, 0x09, 0x0201, 0x00, (char *) question, 2,
-			timeout);
-	if (r < 0) {
-		perror("USB control write");
-		bad("USB write failed");
-	}
-
-	if (debug) {
-		for (i = 0; i < reqIntLen; i++)
-			printf("%02x ", question[i] & 0xFF);
-		printf("\n");
-	}
-}
-*/
-
-/*
-void control_transfer(usb_dev_handle *dev, const char *pquestion) {
-	int r, i;
-
-	char question[reqIntLen];
-
-	memcpy(question, pquestion, sizeof question);
-
-	r = usb_control_msg(dev, 0x21, 0x09, 0x0200, 0x01, (char *) question,
-			reqIntLen, timeout);
-	if (r < 0) {
-		perror("USB control write");
-		bad("USB write failed");
-	}
-
-	if (debug) {
-		for (i = 0; i < reqIntLen; i++)
-			printf("%02x ", question[i] & 0xFF);
-		printf("\n");
-	}
-}
-*/
-
-/*
-void interrupt_read(usb_dev_handle *dev) {
-
-	int r, i;
-	char answer[reqIntLen];
-	bzero(answer, reqIntLen);
-
-	r = usb_interrupt_read(dev, 0x82, answer, reqIntLen, timeout);
-	if (r != reqIntLen) {
-		perror("USB interrupt read");
-		bad("USB read failed");
-	}
-
-	if (debug) {
-		for (i = 0; i < reqIntLen; i++)
-			printf("%02x ", answer[i] & 0xFF);
-
-		printf("\n");
-	}
-}
-*/
-
-/*
-void interrupt_read_temperature(usb_dev_handle *dev, float *tempC) {
-
-	int r, i, temperature;
-	char answer[reqIntLen];
-	bzero(answer, reqIntLen);
-
-	r = usb_interrupt_read(dev, 0x82, answer, reqIntLen, timeout);
-	if (r != reqIntLen) {
-		perror("USB interrupt read");
-		bad("USB read failed");
-	}
-
-	if (debug) {
-		for (i = 0; i < reqIntLen; i++)
-			printf("%02x ", answer[i] & 0xFF);
-
-		printf("\n");
-	}
-
-	temperature = (answer[3] & 0xFF) + (answer[2] << 8);
-	*tempC = temperature * (125.0 / 32000.0);
-
-}
-*/
 
 void ex_program(int sig) {
 	loopExitFlag = 1;
@@ -333,13 +127,13 @@ void ex_program(int sig) {
 
 int main(int argc, char **argv) {
 
-	//usb_dev_handle *lvr_winusb = NULL;
 	float tempc;
 	int c;
 	struct tm *local;
 	time_t t;
-	int i, foo, bar;
+	int i;
 	int devNo = 1;
+	//libusb_device_handle **dev_handle[10];
 	libusb_device_handle *dev_handle;
 
 	libusb_device **devs;
@@ -368,7 +162,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'd':
 				if (optarg != NULL) {
-					if (!sscanf(optarg, "%i", &deviceNumber) == 1) {
+					if (1 == !sscanf(optarg, "%i", &deviceNumber)) {
 						fprintf(stderr, "Error: '%s' is not numeric.\n", optarg);
 						exit(EXIT_FAILURE);
 					}
@@ -378,7 +172,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'a':
 				if (optarg != NULL) {
-					if (!sscanf(optarg, "%f", &delta) == 1) {
+					if (1 == !sscanf(optarg, "%f", &delta)) {
 						fprintf(stderr, "Error: '%s' is not numeric.\n", optarg);
 						exit(EXIT_FAILURE);
 					}
@@ -386,7 +180,7 @@ int main(int argc, char **argv) {
 				break;
 			case 'l':
 				if (optarg != NULL) {
-					if (!sscanf(optarg, "%i", &seconds) == 1) {
+					if (1 == !sscanf(optarg, "%i", &seconds)) {
 						fprintf(stderr, "Error: '%s' is not numeric.\n", optarg);
 						exit(EXIT_FAILURE);
 					} else {
@@ -436,91 +230,92 @@ int main(int argc, char **argv) {
 	cnt = libusb_get_device_list(ctx, &devs);
 	if (cnt < 0)
 		return (int) cnt;
-	for (i = 10000; i < cnt; i++){
-		print_devs(devs[i]);
+	for (i = 0; i < cnt; i++){
+		totalDevices += open_device_temperusb(devs[i], &dev_handle);
 	}
-	dev_handle = libusb_open_device_with_vid_pid(ctx, VENDOR_ID, PRODUCT_ID);
 
-	r = libusb_claim_interface(dev_handle, 0);
-	if (r < 0)
-		return r;
-	r = libusb_claim_interface(dev_handle, 1);
-	if (r < 0)
-			return r;
+	//dev_handle = libusb_open_device_with_vid_pid(ctx, VENDOR_ID, PRODUCT_ID);
 
+	for (i=0; i < totalDevices; i++){
+
+		r = libusb_claim_interface(dev_handle, 0);
+		if (r < 0){
+			if (r == LIBUSB_ERROR_BUSY){
+				libusb_detach_kernel_driver(dev_handle, 0);
+				}
+			else
+				return r;
+			}
+
+		r = libusb_claim_interface(dev_handle, 1);
+			if (r < 0){
+				if (r == LIBUSB_ERROR_BUSY){
+					libusb_detach_kernel_driver(dev_handle, 1);
+				}
+				else
+					return r;
+			}
+
+	}
 	libusb_free_device_list(devs, cnt);
 
 	do {
+		(void) signal(SIGINT, ex_program);
+		for (i=0; i < totalDevices; i++){
+			r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValueControl, wIndexControl, question, wLength, timeout);
 
-		r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValue, wIndex, question, wLength, timeout);
+			r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValueXfer, wIndexXfer, (unsigned char *) uTemperature, reqIntLen, timeout);
+			bzero(answer, reqIntLen);
+			r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
 
-		r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, 0x0200, 0x0001, (char *) uTemperature, reqIntLen, timeout);
-		bzero(answer, reqIntLen);
-		r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
+			temperature = (answer[3] & 0xFF) + (answer[2] << 8);
+			tempc = temperature * (125.0 / 32000.0);
 
-		r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, 0x0200, 0x0001, (char *) uIni1, reqIntLen, timeout);
-		bzero(answer, reqIntLen);
-		r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
+			tempc = (tempc + delta);
 
-		r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, 0x0200, 0x0001, (char *) uIni2, reqIntLen, timeout);
-		bzero(answer, reqIntLen);
-		r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
-		bzero(answer, reqIntLen);
-		r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
+				t = time(NULL);
+				local = localtime(&t);
 
-		r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, 0x0200, 0x0001, (char *) uTemperature, reqIntLen, timeout);
-		bzero(answer, reqIntLen);
-		r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
+				if (mrtg) {
+					if (format == 2) {
+						printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
+						printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
+					} else {
+						printf("%.2f\n", tempc);
+						printf("%.2f\n", tempc);
+					}
 
+					printf("%02d:%02d\n", local->tm_hour, local->tm_min);
 
-
-
-		temperature = (answer[3] & 0xFF) + (answer[2] << 8);
-		tempc = temperature * (125.0 / 32000.0);
-
-		tempc = (tempc + delta);
-
-			t = time(NULL);
-			local = localtime(&t);
-
-			if (mrtg) {
-				if (format == 2) {
-					printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
-					printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
+					printf("pcsensor\n");
 				} else {
-					printf("%.2f\n", tempc);
-					printf("%.2f\n", tempc);
+					if (format == 2) {
+						printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
+					} else if (format == 1) {
+						printf("%.2f\n", tempc);
+					} else {
+						printf("%04d/%02d/%02d %02d:%02d:%02d ",
+								local->tm_year + 1900, local->tm_mon + 1,
+								local->tm_mday, local->tm_hour, local->tm_min,
+								local->tm_sec);
+
+						printf("Device %d Temperature %.2fF %.2fC\n", (devNo - 1),
+								(9.0 / 5.0 * tempc + 32.0), tempc);
+					}
+
 				}
-
-				printf("%02d:%02d\n", local->tm_hour, local->tm_min);
-
-				printf("pcsensor\n");
-			} else {
-				if (format == 2) {
-					printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
-				} else if (format == 1) {
-					printf("%.2f\n", tempc);
-				} else {
-					printf("%04d/%02d/%02d %02d:%02d:%02d ",
-							local->tm_year + 1900, local->tm_mon + 1,
-							local->tm_mday, local->tm_hour, local->tm_min,
-							local->tm_sec);
-
-					printf("Device %d Temperature %.2fF %.2fC\n", (devNo - 1),
-							(9.0 / 5.0 * tempc + 32.0), tempc);
-				}
-
-	}
+		}
 			if (!loopExitFlag)
 				sleep(seconds);
-		} while (!loopExitFlag);
+	} while (!loopExitFlag);
 
-	r = libusb_release_interface(dev_handle, 0); //release the claimed interface
-	r = libusb_release_interface(dev_handle, 1); //release the claimed interface
-	if (r < 0)
-			return r;
+	for (i=0; i < totalDevices; i++){
+		r = libusb_release_interface(dev_handle, 0); //release the claimed interface
+		r = libusb_release_interface(dev_handle, 1); //release the claimed interface
+		libusb_close(dev_handle);
 
-	libusb_close(dev_handle);
+	}
+
 	libusb_exit(ctx);
 	return 0;
 
