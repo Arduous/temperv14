@@ -235,7 +235,7 @@ int main(int argc, char **argv) {
 
 	libusb_init(&ctx);
 
-	libusb_set_debug(ctx, 3 + debug);
+	libusb_set_option(ctx, LIBUSB_OPTION_LOG_LEVEL, 3 + debug);
 
 	// Loop around continuous polling
 	do {
