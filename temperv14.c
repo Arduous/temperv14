@@ -50,6 +50,9 @@
 /* 2018-08-06 V2.0 Samuel Progin
  * Migrating from libusb to libusb-1.0
  *
+ * 2018-04-21 V2.1 Samuel Progin
+ * Getting rid of a deprecation warning
+ * requires libusb-1.0.22
  */
 
 #include <libusb-1.0/libusb.h>
@@ -63,7 +66,7 @@
 #include <signal.h> 
 #include <getopt.h>
 
-#define VERSION "2.0"
+#define VERSION "2.1"
 
 #define VENDOR_ID  0x0c45
 #define PRODUCT_ID 0x7401
