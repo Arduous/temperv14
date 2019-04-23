@@ -50,7 +50,7 @@
 /* 2018-08-06 V2.0 Samuel Progin
  * Migrating from libusb to libusb-1.0
  *
- * 2018-04-21 V2.1 Samuel Progin
+ * 2019-04-21 V2.1 Samuel Progin
  * Getting rid of a deprecation warning
  * requires libusb-1.0.22
  */
