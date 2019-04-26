@@ -1,53 +1,31 @@
 /*
- * temperv14.c By Steffan Slot (dev-random.net) based on the version 
- * below by Juan Carlos.
- * 
- * pcsensor.c by Juan Carlos Perez (c) 2011 (cray@isp-sl.com)
- * based on Temper.c by Robert Kavaler (c) 2009 (relavak.com)
- * All rights reserved.
- *
  * Temper driver for linux. The driver will work with
  * TEMPerUSB V1.4 devices from RDing (www.PCsensor.com).
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
+ * based on Temper.c by Robert Kavaler (c) 2009 (relavak.com)
+ * All rights reserved.
+ *
+ * pcsensor.c by Juan Carlos Perez (c) 2011 (cray@isp-sl.com)
+ *
+ * temperv14.c By Steffan Slot (dev-random.net) based on the version 
  * 
- * THIS SOFTWARE IS PROVIDED BY Juan Carlos Perez ''AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Robert kavaler BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
- */
-/*
  * Modified from original version (0.0.1) by Patrick Skillen (pskillen@gmail.com)
  * - 2013-01-10 - If outputting only deg C or dec F, do not print the date (to make scripting easier)
- */
-/*
+ *
  * 2013-08-19
  * Modified from abobe version for better name, and support to 
  * subtract degrees in Celsius for some TEMPer devices that displayed
  * too much.
  *
- */
-/* 2016-03-09 Modified to V0.0.2 by Roland Fritz
+ * 2016-03-09 Modified to V0.0.2 by Roland Fritz
  * Added multiple device support (-d)
  * Added added arg (-a)
  *
- */
-/* 2018-08-06 V1.1 Samuel Progin
+ * 2018-08-06 V1.1 Samuel Progin
  * Code clean-up, refactoring and formatting
  * 2 Warnings fixed
  *
- */
-/* 2018-08-06 V2.0 Samuel Progin
+ * 2018-08-06 V2.0 Samuel Progin
  * Migrating from libusb to libusb-1.0
  *
  * 2019-04-21 V2.1 Samuel Progin
