@@ -1,6 +1,6 @@
 # temperv14
 Temperv14 is a linux tool for Temperature measuring using "TEMPer USB 1.4".
-Version 2.0 is now relying on libusb-1.0, whereas older version > 2.0 found here and over the internet were relying on libusb-0.1 or its wrapper libusb-compat.
+Version 2.0 is now relying on libusb-1.0, whereas older version < 2.0 found here and over the internet were relying on libusb-0.1 or its wrapper libusb-compat.
 
 ```
 $ lsusb |grep Microdia
