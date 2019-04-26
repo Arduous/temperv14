@@ -3,7 +3,7 @@ all:	temperv14
 CFLAGS = -O2 -Wall
 
 temperv14:	temperv14.c
-	${CC} -lusb-1.0 -o $@ $^ 
+	${CC} -o $@ $^ -lusb-1.0 
 
 clean:		
 	rm -f temperv14 *.o
