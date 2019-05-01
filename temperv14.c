@@ -31,6 +31,10 @@
  * 2019-04-21 V2.1 Samuel Progin
  * Getting rid of a deprecation warning
  * requires libusb-1.0.22
+ *
+ * 2019-05-01 V2.2 Samuel Progin
+ * Rework of licensing
+ * Correction of typoes
  */
 
 #include <libusb-1.0/libusb.h>
@@ -44,7 +48,7 @@
 #include <signal.h> 
 #include <getopt.h>
 
-#define VERSION "2.1"
+#define VERSION "2.2"
 
 #define VENDOR_ID  0x0c45
 #define PRODUCT_ID 0x7401
