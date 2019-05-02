@@ -5,8 +5,8 @@ Version 2.0 is now relying on libusb-1.0, whereas older version < 2.0 found here
 ```
 $ lsusb |grep Microdia
 Bus 001 Device 026: ID 0c45:7401 Microdia TEMPer Temperature Sensor
-$ ./temperv14 -h
-TemperUSB reader version 2.0
+$ ./temperusb -h
+TemperUSB reader version 2.3
       Available options:
           -h help
           -v verbose
