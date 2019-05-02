@@ -1,8 +1,9 @@
-all:	temperv14
+.PHONY: clean rules-install
+all:	temperusb
 
 CFLAGS = -O2 -Wall
 
-temperv14:	temperv14.c
+temperusb:	temperv14.c
 	${CC} -o $@ $^ -lusb-1.0 
 
 clean:		
