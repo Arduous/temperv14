@@ -219,8 +219,11 @@ int main(int argc, char **argv) {
 	}
 
 	libusb_init(&ctx);
-
+    #if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000106) // libusb 1.0.22
 	libusb_set_option(ctx, LIBUSB_OPTION_LOG_LEVEL, 3 + debug);
+    #else
+	libusb_set_debug(ctx, 3 + debug);
+    #endif
 
 	// Loop around continuous polling
 	do {
