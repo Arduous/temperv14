@@ -230,37 +230,37 @@ int main(int argc, char **argv) {
 		libusb_device_handle *dev_handle = NULL;
 
 		(void) signal(SIGINT, ex_program);
-
 		cnt = libusb_get_device_list(ctx, &devs);
 		if (cnt < 0)
 			return (int) cnt;
 		currentDevice = 0;
 		// loop on all USB devices found
 		for (i = 0; i < cnt; i++){
-			// check if the USB device is a TemperUSB device
 			if (1 == detect_temper_device(devs[i])){
-				// Are we polling all devices one by one or just a specific one
 				if ((-1 == deviceNumber) || (currentDevice == deviceNumber)){
 					r = libusb_open(devs[i], &dev_handle);
-					if ((0 != debug) && (0 != r)) {
-						fprintf(stdout, "libusb_open error %d?\n", r);
-					}
 					claim_temper_interface(dev_handle);
 
+					// Perform control and interrupt transfers to read temperature
 					r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValueControl, wIndexControl, question, wLength, timeout);
-					if ((0 != debug) && (0 > r)) {fprintf(stdout, "Error code on configuring the device %d?\n", r);}
 					r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValueXfer, wIndexXfer, uTemperature, reqIntLen, timeout);
-					if ((0 != debug) && (0 > r)) {fprintf(stdout, "Error code on requesting the transfer %d?\n", r);}
-					bzero(answer, reqIntLen);
 					r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
-					if ((0 != debug) && (0 > r)) {fprintf(stdout, "Error code on transfer %d?\n", r);}
 
-					tempc = ((answer[3] & 0xFF) + (answer[2] << 8)) * (125.0 / 32000.0) + delta;
+					//tempc = ((answer[3] & 0xFF) + (answer[2] << 8)) * (125.0 / 32000.0) + delta;
+                                        // 1. Combine bytes into an explicit 
+                                        // signed 16-bit integer to preserve
+                                        // negative values
+                                        int16_t raw_temp = (int16_t)((answer[2] << 8) | (answer[3] & 0xFF));
+
+                                        // 2. Perform the math using the
+                                        // signed value
+                                        tempc = (raw_temp * (125.0 / 32000.0)) + delta;
 
 					t = time(NULL);
 					local = localtime(&t);
 
-					if (mrtg) {
+					// Output temperature data (MRTG or standard format)
+                    if (mrtg) {
 						if (format == 2) {
 							printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
 							printf("%.2f\n", (9.0 / 5.0 * tempc + 32.0));
@@ -270,7 +270,6 @@ int main(int argc, char **argv) {
 						}
 
 						printf("%02d:%02d\n", local->tm_hour, local->tm_min);
-
 						printf("pcsensor\n");
 					} else {
 						if (format == 2) {
@@ -288,12 +287,20 @@ int main(int argc, char **argv) {
 						}
 					}
 
-					// release the interfaces and the handle
-					for (int i = 0; i < 2; i++) libusb_release_interface(dev_handle, 0);
+					// FIX 1 & 2: Release interfaces and re-attach kernel drivers dynamically
+					for (int j = 0; j < 2; j++) {
+						libusb_release_interface(dev_handle, j);
+						libusb_attach_kernel_driver(dev_handle, j);
+					}
 					libusb_close(dev_handle);
 				}
 				currentDevice++;
 			}
+		}
+
+		// FIX 3: Free the memory allocated by libusb_get_device_list
+		if (cnt > 0) {
+			libusb_free_device_list(devs, 1);
 		}
 
 		if (!loopExitFlag)
@@ -303,3 +310,4 @@ int main(int argc, char **argv) {
 	libusb_exit(ctx);
 	return 0;
 }
+
