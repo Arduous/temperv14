@@ -47,6 +47,7 @@
 #include <errno.h>
 #include <signal.h> 
 #include <getopt.h>
+#include <stdint.h>
 
 #define VERSION "2.2"
 
@@ -100,7 +101,7 @@ static int detect_temper_device(libusb_device *dev)
 	return 0;
 }
 
-static int claim_temper_interface(libusb_device_handle *dev_handle)
+static int claim_temper_interface(libusb_device_handle *dev_handle, int claimed[2], int detached[2])
 /**
  * Wrapper around libusb_claim_interface for the two interfaces
  * of the TEMPerUSB device
@@ -111,15 +112,34 @@ static int claim_temper_interface(libusb_device_handle *dev_handle)
 	int r = 0;
 	for (int i = 0; i < 2; i++){
 		r = libusb_claim_interface(dev_handle, i);
-		if (r < 0){
-			if (r == LIBUSB_ERROR_BUSY){
-				libusb_detach_kernel_driver(dev_handle, i);
+		if (r == LIBUSB_ERROR_BUSY){
+			int detach_result = libusb_detach_kernel_driver(dev_handle, i);
+			if (detach_result == 0){
+				detached[i] = 1;
 				r = libusb_claim_interface(dev_handle, i);
 			}
 		}
+		if (r < 0) {
+			if (debug) fprintf(stderr, "USB interface %d could not be claimed: %s\n", i, libusb_error_name(r));
+			return r;
+		}
+		claimed[i] = 1;
 	}
-	if ((0 != debug) && (0 != r)) {fprintf(stdout, "USB interface could not be claimed. Permission issue?\n");}
 	return r;
+}
+
+static void release_temper_interface(libusb_device_handle *dev_handle, const int claimed[2], const int detached[2])
+{
+	for (int i = 0; i < 2; i++) {
+		if (claimed[i]) {
+			int r = libusb_release_interface(dev_handle, i);
+			if (debug && r < 0) fprintf(stderr, "Could not release USB interface %d: %s\n", i, libusb_error_name(r));
+		}
+		if (detached[i]) {
+			int r = libusb_attach_kernel_driver(dev_handle, i);
+			if (debug && r < 0) fprintf(stderr, "Could not reattach kernel driver on interface %d: %s\n", i, libusb_error_name(r));
+		}
+	}
 }
 
 void ex_program(int sig) {
@@ -218,7 +238,11 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	libusb_init(&ctx);
+	r = libusb_init(&ctx);
+	if (r < 0) {
+		fprintf(stderr, "libusb_init failed: %s\n", libusb_error_name(r));
+		return EXIT_FAILURE;
+	}
     #if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000106) // libusb 1.0.22
 	libusb_set_option(ctx, LIBUSB_OPTION_LOG_LEVEL, 3 + debug);
     #else
@@ -232,8 +256,11 @@ int main(int argc, char **argv) {
 		(void) signal(SIGINT, ex_program);
 
 		cnt = libusb_get_device_list(ctx, &devs);
-		if (cnt < 0)
-			return (int) cnt;
+		if (cnt < 0) {
+			if (debug) fprintf(stderr, "libusb_get_device_list failed: %s\n", libusb_error_name((int)cnt));
+			libusb_exit(ctx);
+			return EXIT_FAILURE;
+		}
 		currentDevice = 0;
 		// loop on all USB devices found
 		for (i = 0; i < cnt; i++){
@@ -241,21 +268,36 @@ int main(int argc, char **argv) {
 			if (1 == detect_temper_device(devs[i])){
 				// Are we polling all devices one by one or just a specific one
 				if ((-1 == deviceNumber) || (currentDevice == deviceNumber)){
+					int claimed[2] = {0, 0};
+					int detached[2] = {0, 0};
 					r = libusb_open(devs[i], &dev_handle);
 					if ((0 != debug) && (0 != r)) {
-						fprintf(stdout, "libusb_open error %d?\n", r);
+						fprintf(stderr, "libusb_open error: %s\n", libusb_error_name(r));
 					}
-					claim_temper_interface(dev_handle);
+					if (r < 0 || dev_handle == NULL) {
+						currentDevice++;
+						continue;
+					}
+					r = claim_temper_interface(dev_handle, claimed, detached);
+					if (r < 0) goto close_device;
 
 					r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValueControl, wIndexControl, question, wLength, timeout);
 					if ((0 != debug) && (0 > r)) {fprintf(stdout, "Error code on configuring the device %d?\n", r);}
+					if (r < 0) goto close_device;
 					r = libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValueXfer, wIndexXfer, uTemperature, reqIntLen, timeout);
 					if ((0 != debug) && (0 > r)) {fprintf(stdout, "Error code on requesting the transfer %d?\n", r);}
+					if (r < 0) goto close_device;
 					bzero(answer, reqIntLen);
-					r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, NULL, timeout);
+					int transferred = 0;
+					r = libusb_interrupt_transfer(dev_handle, 0x82, answer, reqIntLen, &transferred, timeout);
 					if ((0 != debug) && (0 > r)) {fprintf(stdout, "Error code on transfer %d?\n", r);}
+					if (r < 0 || transferred < 4) {
+						if (debug && r == 0) fprintf(stderr, "Short temperature response: %d bytes\n", transferred);
+						goto close_device;
+					}
 
-					tempc = ((answer[3] & 0xFF) + (answer[2] << 8)) * (125.0 / 32000.0) + delta;
+					int16_t raw_temp = (int16_t)((answer[2] << 8) | answer[3]);
+					tempc = raw_temp * (125.0 / 32000.0) + delta;
 
 					t = time(NULL);
 					local = localtime(&t);
@@ -288,13 +330,14 @@ int main(int argc, char **argv) {
 						}
 					}
 
-					// release the interfaces and the handle
-					for (int i = 0; i < 2; i++) libusb_release_interface(dev_handle, 0);
+				close_device:
+					release_temper_interface(dev_handle, claimed, detached);
 					libusb_close(dev_handle);
 				}
 				currentDevice++;
 			}
 		}
+		libusb_free_device_list(devs, 1);
 
 		if (!loopExitFlag)
 			sleep(seconds);
